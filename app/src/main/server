@@ -1,0 +1,32 @@
+from flask import Flask, request, jsonify
+from collections import defaultdict
+
+app = Flask(__name__)
+
+noisy_data_store = []
+
+
+@app.route('/')
+def home():
+    return "Server is running. Try /submit or /results"
+
+
+
+@app.route('/submit', methods=['POST'])
+def submit():
+    data = request.get_json()
+    website = data.get("website")
+    if website:
+        noisy_data_store.append(website)
+        return jsonify({"status": "success"}), 200
+    return jsonify({"status": "error", "message": "Missing website"}), 400
+
+@app.route('/results', methods=['GET'])
+def results():
+    count_dict = defaultdict(int)
+    for site in noisy_data_store:
+        count_dict[site] += 1
+    return jsonify(dict(count_dict))
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
