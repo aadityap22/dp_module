@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme using AppCompat -->
+    <style name="Theme.DpModule" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme colors here -->
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorPrimaryDark">#3700B3</item>
+        <item name="colorAccent">#03DAC5</item>
+    </style>
+
+</resources>
