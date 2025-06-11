@@ -1,0 +1,29 @@
+from flask import Flask, request, jsonify
+from collections import defaultdict
+
+app = Flask(__name__)
+
+noisy_data_store = []
+
+@app.route('/')
+def home():
+    return "Server is running. Try /submit or /results"
+
+@app.route('/submit', methods=['POST'])
+def submit():
+    data = request.get_json()
+    index = data.get("index")
+    if index is not None:
+        noisy_data_store.append(int(index))
+        return jsonify({"status": "success"}), 200
+    return jsonify({"status": "error", "message": "Missing index"}), 400
+
+@app.route('/results', methods=['GET'])
+def results():
+    count_dict = defaultdict(int)
+    for idx in noisy_data_store:
+        count_dict[idx] += 1
+    return jsonify(dict(count_dict))
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
