@@ -1,28 +1,27 @@
 package com.example.dp_module
 
-
-
 import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.*
 import okhttp3.*
 import org.json.JSONObject
-import kotlin.math.ln
 import kotlin.random.Random
 import okhttp3.MediaType.Companion.toMediaType
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Request
-import okhttp3.OkHttpClient
-
-
 
 class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient()
-    private val serverUrl = "http://10.0.2.2:5000" // Use this for local server in Android emulator
+    private val serverUrl = "http://10.0.2.2:5000" // Emulator -> localhost
+
+    // Predefined website list
+    private val websiteList = listOf(
+        "google.com", "youtube.com", "facebook.com", "twitter.com", "instagram.com",
+        "stackoverflow.com", "linkedin.com", "netflix.com", "github.com", "reddit.com",
+        "microsoft.com"
+    )
+
+    private val p = 0.75  // Probability to report true index
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,41 +33,49 @@ class MainActivity : AppCompatActivity() {
         val outputText = findViewById<TextView>(R.id.outputText)
 
         submitBtn.setOnClickListener {
-            val site = websiteInput.text.toString()
-            if (site.isNotEmpty()) {
-                val noisySite = addLaplaceNoise(site)
-                sendNoisyData(noisySite)
-                Toast.makeText(this, "Submitted: $noisySite", Toast.LENGTH_SHORT).show()
+            val site = websiteInput.text.toString().trim()
+            val index = websiteList.indexOf(site)
+
+            if (index != -1) {
+                sendNoisyDataRR(index)
+                Toast.makeText(this, "Submitted with randomized response", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Invalid website. Choose from list.", Toast.LENGTH_LONG).show()
             }
         }
 
         resultsBtn.setOnClickListener {
             fetchResults { result ->
                 runOnUiThread {
-                    outputText.text = result
+                    val counts = parseServerResults(result)
+                    val totalReports = counts.sum()
+                    val decodedCounts = decodeCountsRR(counts, totalReports)
+
+                    val display = websiteList.indices.joinToString("\n") { i ->
+                        "${websiteList[i]}: ${"%.1f".format(decodedCounts[i])}"
+                    }
+                    outputText.text = display
                 }
             }
         }
     }
 
-    private fun addLaplaceNoise(input: String): String {
-        // Convert input to an integer hash
-        val hash = input.hashCode()
-        val noise = laplaceNoise(1.0)
-        val noisedHash = (hash + noise).toInt()
-        return noisedHash.toString()
-    }
+    // Randomized Response submission
+    private fun sendNoisyDataRR(trueIndex: Int) {
+        val n = websiteList.size
+        val reportIndex = if (Random.nextDouble() < p) {
+            trueIndex
+        } else {
+            var randIndex: Int
+            do {
+                randIndex = Random.nextInt(n)
+            } while (randIndex == trueIndex)
+            randIndex
+        }
 
-    private fun laplaceNoise(scale: Double): Double {
-        val u = Random.nextDouble() - 0.5
-        return -scale * kotlin.math.sign(u) * ln(1 - 2 * kotlin.math.abs(u))
-    }
-
-
-    private fun sendNoisyData(noisyWebsite: String) {
         CoroutineScope(Dispatchers.IO).launch {
             val json = JSONObject()
-            json.put("website", noisyWebsite)
+            json.put("index", reportIndex)
 
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val body = json.toString().toRequestBody(mediaType)
@@ -79,11 +86,10 @@ class MainActivity : AppCompatActivity() {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.body?.string() // You can log or use this response if needed
+                response.body?.string() // Optional: log or handle response
             }
         }
     }
-
 
     private fun fetchResults(callback: (String) -> Unit) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -93,11 +99,32 @@ class MainActivity : AppCompatActivity() {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                val body = response.body
-                val resBody = body?.string() ?: ""
+                val resBody = response.body?.string() ?: ""
                 callback(resBody)
             }
         }
     }
 
+    private fun parseServerResults(jsonStr: String): List<Int> {
+        val json = JSONObject(jsonStr)
+        val counts = mutableListOf<Int>()
+
+        for (i in websiteList.indices) {
+            counts.add(json.optInt(i.toString(), 0))
+        }
+        return counts
+    }
+
+    private fun decodeCountsRR(counts: List<Int>, totalReports: Int): List<Double> {
+        val n = websiteList.size
+        val decoded = mutableListOf<Double>()
+
+        for (j in 0 until n) {
+            val cj = counts[j].toDouble()
+            val est = (cj - ((1 - p) / n) * totalReports) / (p - (1 - p) / n)
+            decoded.add(if (est < 0) 0.0 else est)
+        }
+
+        return decoded
+    }
 }
